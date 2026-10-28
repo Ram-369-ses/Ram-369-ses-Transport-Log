@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Trip Log – November 2026</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  --bg:#ffffff; --text:#1a1a1a; --muted:#666666; --line:#bfbfbf;
+  --weekend:#ddebf7; --holiday:#e2efda; --total:#d9e1f2;
+  --navy:#1f4e78; --orange:#c55a11; --yes:#0000ff; --off:#c00000;
+  --btn:#1f4e78; --btntext:#ffffff;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#16181c; --text:#f0f0f0; --muted:#a0a0a0; --line:#444a52;
+    --weekend:#1e3550; --holiday:#27422a; --total:#2a3a58;
+    --yes:#7fb2ff; --off:#ff7b7b; --btn:#2f6fa8;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#16181c; --text:#f0f0f0; --muted:#a0a0a0; --line:#444a52;
+  --weekend:#1e3550; --holiday:#27422a; --total:#2a3a58;
+  --yes:#7fb2ff; --off:#ff7b7b; --btn:#2f6fa8;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px);color-scheme:light dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Arial,Helvetica,sans-serif;font-size:16px}
+.wrap{max-width:560px;margin:0 auto;padding:14px 10px 40px}
+h1{font-size:22px;margin:4px 0 2px}
+.name{font-weight:bold;font-size:17px;margin-bottom:4px}
+.hint{font-size:12px;color:var(--muted);margin-bottom:10px}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+th,td{border:1px solid var(--line);text-align:center;padding:0;height:42px;font-size:16px}
+th{color:#fff;font-size:14px;padding:6px 2px;line-height:1.25}
+.navy{background:var(--navy)} .orange{background:var(--orange)}
+td.date{font-size:14px} td.day{font-size:15px;cursor:pointer}
+td.day small{display:block;font-size:11px;font-weight:bold}
+tr.weekend td{background:var(--weekend)}
+tr.holiday td{background:var(--holiday)}
+td.cell{cursor:pointer;font-weight:bold;-webkit-tap-highlight-color:transparent;user-select:none}
+td.cell.yes{color:var(--yes)} td.cell.off{color:var(--off)}
+td.cell.yes small{font-size:11px;display:block}
+tr.tot td{background:var(--total);font-weight:bold;height:44px}
+table.sum{margin-top:14px;width:70%}
+table.sum td{background:var(--total);font-weight:bold;height:44px}
+table.sum td:first-child{width:75%}
+.actions{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
+button.main{flex:1;min-width:180px;background:var(--btn);color:var(--btntext);border:0;border-radius:10px;padding:14px;font-size:17px;font-weight:bold;cursor:pointer}
+button.alt{background:transparent;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:14px;font-size:15px;cursor:pointer}
+button:disabled{opacity:.5;cursor:default}
+#msg{margin-top:10px;font-size:14px;min-height:20px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Trip Log – November 2026</h1>
+  <div class="name">Name: Ramar</div>
+  <div class="hint">Tap a box to change it. Tap a day to mark a public holiday.</div>
+  <table id="log">
+    <colgroup><col style="width:23%"><col style="width:13%"><col style="width:16%"><col style="width:16%"><col style="width:16%"><col style="width:16%"></colgroup>
+    <thead>
+      <tr><th class="navy" colspan="2">DATE</th><th class="navy">FIXED</th><th class="orange" colspan="3">EXTRA</th></tr>
+      <tr>
+        <th class="navy">Date</th><th class="navy">Day</th>
+        <th class="navy">2:55 AM<br>Red Q</th>
+        <th class="orange">5:00 AM<br>Terminal 2</th>
+        <th class="orange">Weekend<br>4:15 AM<br>Red Q</th>
+        <th class="orange">9:30 PM<br>Terminal 2</th>
+      </tr>
+    </thead>
+    <tbody id="body"></tbody>
+    <tfoot><tr class="tot" id="totrow"></tr></tfoot>
+  </table>
+  <table class="sum">
+    <tr><td>Total Fixed Trips</td><td id="sFixed">0</td></tr>
+    <tr><td>Total Extra Trips</td><td id="sExtra">0</td></tr>
+    <tr><td>All Trips</td><td id="sAll">0</td></tr>
+  </table>
+  <div class="actions">
+    <button class="main" id="dl" disabled>Download Excel</button>
+    <button class="alt" id="reset">Clear month</button>
+  </div>
+  <div id="msg"></div>
+</div>
+
+<script>
+(function(){
+  var YEAR=2026, MONTH=10, DAYS=30, KEY="triplog-2026-11-ramar";
+  var DN=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  var MN=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  var state={c:{},d:{},e:{},f:{},ph:{}};
+  try{var s=localStorage.getItem(KEY); if(s){var p=JSON.parse(s); if(p&&p.c) state=p;}}catch(e){}
+  function save(){try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){}}
+  function pad(n){return (n<10?"0":"")+n;}
+  function dow(d){return new Date(YEAR,MONTH,d).getDay();}
+  function isWk(d){var w=dow(d);return w===0||w===6;}
+  function dateStr(d){return pad(d)+"-"+MN[MONTH]+"-"+YEAR;}
+  function dayLabel(d){return DN[dow(d)]+(state.ph[d]?" - Public Holiday":"");}
+
+  function cycleC(d){
+    var v=state.c[d]||"";
+    var yes=state.ph[d]?"Yes (4:15 AM)":"Yes";
+    if(!v) state.c[d]=yes; else if(v.indexOf("Yes")===0) state.c[d]="Off"; else delete state.c[d];
+  }
+  function cycleYes(key,d){ if(state[key][d]) delete state[key][d]; else state[key][d]="Yes"; }
+
+  function render(){
+    var body=document.getElementById("body"); body.textContent="";
+    var cnt={c:0,d:0,e:0,f:0};
+    for(var d=1;d<=DAYS;d++){
+      (function(d){
+        var tr=document.createElement("tr");
+        if(state.ph[d]) tr.className="holiday"; else if(isWk(d)) tr.className="weekend";
+        var td=document.createElement("td"); td.className="date"; td.textContent=dateStr(d); tr.appendChild(td);
+        td=document.createElement("td"); td.className="day";
+        if(state.ph[d]){ td.textContent=DN[dow(d)]; var sm=document.createElement("small"); sm.textContent="Public Holiday"; td.appendChild(sm);}
+        else td.textContent=DN[dow(d)];
+        td.onclick=function(){ if(state.ph[d]) delete state.ph[d]; else state.ph[d]=true;
+          if(state.c[d]&&state.c[d].indexOf("Yes")===0) state.c[d]=state.ph[d]?"Yes (4:15 AM)":"Yes";
+          save(); render(); };
+        tr.appendChild(td);
+        ["c","d","e","f"].forEach(function(k){
+          var c=document.createElement("td"); c.className="cell"; var v=state[k][d]||"";
+          if(v){
+            if(v==="Off"){c.className+=" off"; c.textContent="Off";}
+            else { c.className+=" yes"; if(v==="Yes (4:15 AM)"){c.textContent="Yes"; var s2=document.createElement("small"); s2.textContent="(4:15 AM)"; c.appendChild(s2);} else c.textContent="Yes"; cnt[k]++; }
+          }
+          c.onclick=function(){ if(k==="c") cycleC(d); else cycleYes(k,d); save(); render(); };
+          tr.appendChild(c);
+        });
+        body.appendChild(tr);
+      })(d);
+    }
+    var t=document.getElementById("totrow"); t.textContent="";
+    var l=document.createElement("td"); l.colSpan=2; l.textContent="Total Trips"; t.appendChild(l);
+    ["c","d","e","f"].forEach(function(k){var c=document.createElement("td"); c.textContent=cnt[k]; t.appendChild(c);});
+    document.getElementById("sFixed").textContent=cnt.c;
+    var ex=cnt.d+cnt.e+cnt.f;
+    document.getElementById("sExtra").textContent=ex;
+    document.getElementById("sAll").textContent=cnt.c+ex;
+  }
+
+  function msg(t){document.getElementById("msg").textContent=t||"";}
+
+  document.getElementById("reset").onclick=function(){
+    if(!confirm("Clear all entries for November 2026?")) return;
+    state={c:{},d:{},e:{},f:{},ph:{}}; save(); render(); msg("Month cleared.");
+  };
+
+  document.getElementById("dl").disabled=false;
+
+  async function buildXlsx(){
+    var wb=new ExcelJS.Workbook(); var ws=wb.addWorksheet("November 2026",{views:[{state:"frozen",ySplit:5}]});
+    var thin={style:"thin",color:{argb:"FFBFBFBF"}}; var bd={top:thin,left:thin,bottom:thin,right:thin};
+    var fnt=function(o){return Object.assign({name:"Arial",size:14},o||{});};
+    var ctr={horizontal:"center",vertical:"middle",wrapText:true};
+    [16,13,18,14,14,14].forEach(function(w,i){ws.getColumn(i+1).width=w;});
+    ws.getCell("A1").value="Trip Log – November 2026"; ws.getCell("A1").font=fnt({size:20,bold:true});
+    ws.getCell("A3").value="Name: Ramar"; ws.getCell("A3").font=fnt({size:15,bold:true});
+    var navy="FF1F4E78", org="FFC55A11";
+    ws.mergeCells("A4:B4"); ws.mergeCells("D4:F4");
+    ws.getCell("A4").value="DATE"; ws.getCell("C4").value="FIXED"; ws.getCell("D4").value="EXTRA";
+    ["A","B","C","D","E","F"].forEach(function(c,i){
+      var x=ws.getCell(c+"4"); x.fill={type:"pattern",pattern:"solid",fgColor:{argb:i<3?navy:org}};
+      x.font=fnt({bold:true,color:{argb:"FFFFFFFF"}}); x.alignment=ctr; x.border=bd;
+    });
+    var heads=["Date","Day","2:55 AM\nRed Q","5:00 AM\nTerminal 2","Weekend\n4:15 AM\nRed Q","9:30 PM\nTerminal 2"];
+    heads.forEach(function(h,i){
+      var x=ws.getCell(5,i+1); x.value=h; x.fill={type:"pattern",pattern:"solid",fgColor:{argb:i<3?navy:org}};
+      x.font=fnt({bold:true,color:{argb:"FFFFFFFF"}}); x.alignment=ctr; x.border=bd;
+    });
+    ws.getRow(4).height=26; ws.getRow(5).height=70;
+    var cnt={c:0,d:0,e:0,f:0}, keys=["c","d","e","f"], cols=["C","D","E","F"];
+    for(var d=1;d<=DAYS;d++){
+      var r=5+d, row=ws.getRow(r); row.height=state.ph[d]?46:26;
+      var fill=null;
+      if(state.ph[d]) fill="FFE2EFDA"; else if(isWk(d)) fill="FFDDEBF7";
+      var a=ws.getCell(r,1); a.value=new Date(Date.UTC(YEAR,MONTH,d,12)); a.numFmt="dd-mmm-yyyy";
+      var b=ws.getCell(r,2); b.value=dayLabel(d);
+      [a,b].forEach(function(x){x.font=fnt({bold:x===b&&!!state.ph[d]});x.alignment=ctr;x.border=bd;});
+      keys.forEach(function(k,i){
+        var x=ws.getCell(r,3+i), v=state[k][d]||"";
+        if(v){ x.value=v; if(v==="Off") x.font=fnt({bold:true,color:{argb:"FFC00000"}}); else {x.font=fnt({bold:true,color:{argb:"FF0000FF"}}); cnt[k]++;} }
+        else x.font=fnt();
+        x.alignment=ctr; x.border=bd;
+        x.dataValidation={type:"list",allowBlank:true,formulae:[i===0?'"Yes,Off,Yes (4:15 AM)"':'"Yes"']};
+      });
+      if(fill) for(var c=1;c<=6;c++) ws.getCell(r,c).fill={type:"pattern",pattern:"solid",fgColor:{argb:fill}};
+    }
+    var last=5+DAYS, tr=last+1, tf={type:"pattern",pattern:"solid",fgColor:{argb:"FFD9E1F2"}};
+    ws.mergeCells("A"+tr+":B"+tr); ws.getCell("A"+tr).value="Total Trips";
+    cols.forEach(function(c,i){
+      var f=i===0?'COUNTIF(C6:C'+last+',"Yes*")':'COUNTIF('+c+'6:'+c+last+',"Yes")';
+      ws.getCell(c+tr).value={formula:f,result:cnt[keys[i]]};
+    });
+    for(var c=1;c<=6;c++){var x=ws.getCell(tr,c); x.font=fnt({bold:true}); x.fill=tf; x.border=bd; x.alignment=ctr;}
+    ws.getRow(tr).height=28;
+    var ex=cnt.d+cnt.e+cnt.f;
+    var sum=[["Total Fixed Trips","C"+tr,cnt.c],["Total Extra Trips","SUM(D"+tr+":F"+tr+")",ex],["All Trips","C"+(tr+2)+"+C"+(tr+3),cnt.c+ex]];
+    sum.forEach(function(s,i){
+      var r=tr+2+i; ws.mergeCells("A"+r+":B"+r); ws.getCell("A"+r).value=s[0];
+      ws.getCell("C"+r).value={formula:s[1],result:s[2]}; ws.getCell("C"+r).numFmt="0";
+      for(var c=1;c<=3;c++){var x=ws.getCell(r,c); x.font=fnt({bold:true}); x.fill=tf; x.border=bd; x.alignment=ctr;}
+      ws.getRow(r).height=28;
+    });
+    ws.pageSetup={orientation:"portrait",fitToPage:true,fitToWidth:1,fitToHeight:1,margins:{left:0.3,right:0.3,top:0.3,bottom:0.3,header:0.1,footer:0.1}};
+    return wb.xlsx.writeBuffer();
+  }
+
+  document.getElementById("dl").onclick=async function(){
+    if(typeof ExcelJS==="undefined"){msg("Excel tool did not load. Check your internet and reload.");return;}
+    msg("Preparing file…");
+    try{
+      var buf=await buildXlsx();
+      var blob=new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+      var url=URL.createObjectURL(blob), a=document.createElement("a");
+      a.href=url; a.download="Ramar_Trip_Log_November_2026.xlsx";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function(){URL.revokeObjectURL(url);},2000);
+      msg("Downloaded.");
+    }catch(e){ msg("Could not create the file. Please try again."); }
+  };
+
+  render();
+})();
+</script>
+</body>
+</html>
