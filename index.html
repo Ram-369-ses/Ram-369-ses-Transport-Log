@@ -79,7 +79,7 @@ button:disabled{opacity:.5;cursor:default}
         <th class="navy">Date</th><th class="navy">Day</th>
         <th class="navy">2:55 AM<br>Red Q</th>
         <th class="orange">Other</th>
-        <th class="orange">Weekend<br>4:15 AM<br>Red Q</th>
+        <th class="orange">Saturday<br>4:15 AM<br>Red Q</th>
         <th class="orange">9:30 PM<br>Terminal 2</th>
       </tr>
     </thead>
@@ -104,17 +104,19 @@ button:disabled{opacity:.5;cursor:default}
   var DN=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
   var MN=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   var state={c:{},d:{},e:{},f:{},g:{},ph:{}};
-  try{var s=localStorage.getItem(KEY); if(s){var p=JSON.parse(s); if(p&&p.c){ state=p; Object.keys(state.d||{}).forEach(function(k){ if(state.d[k]==='Yes') state.d[k]='5:00 AM'; }); }}}catch(e){}
+  try{var s=localStorage.getItem(KEY); if(s){var p=JSON.parse(s); if(p&&p.c){ state=p; Object.keys(state.d||{}).forEach(function(k){ if(state.d[k]==='Yes') state.d[k]='5:00 AM'; }); Object.keys(state.c||{}).forEach(function(k){ if(state.c[k]==='Yes'&&(state.ph[k]||new Date(YEAR,MONTH,+k).getDay()===0)) state.c[k]='Yes (4:15 AM)'; }); }}}catch(e){}
   function save(){try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){}}
   function pad(n){return (n<10?"0":"")+n;}
   function dow(d){return new Date(YEAR,MONTH,d).getDay();}
-  function isWk(d){var w=dow(d);return w===0||w===6;}
+  function isWk(d){return dow(d)===6;}
+  function yesLbl(d){return (state.ph[d]||dow(d)===0)?"Yes (4:15 AM)":"Yes";}
+  function val(k,d){ if(k==="c"&&dow(d)===6) return "Off"; if(k==="e"&&dow(d)!==6) return ""; return state[k][d]||""; }
   function dateStr(d){return pad(d)+"-"+MN[MONTH]+"-"+YEAR;}
   function dayLabel(d){return DN[dow(d)]+(state.ph[d]?" - Public Holiday":"");}
 
   function cycleC(d){
     var v=state.c[d]||"";
-    var yes=state.ph[d]?"Yes (4:15 AM)":"Yes";
+    var yes=yesLbl(d);
     if(!v) state.c[d]=yes; else if(v.indexOf("Yes")===0) state.c[d]="Off"; else delete state.c[d];
   }
   var SEQ=["","5:00 AM","10:00 AM","2:00 PM","10:00 AM & 2:00 PM"];
@@ -134,17 +136,17 @@ button:disabled{opacity:.5;cursor:default}
         if(state.ph[d]){ td.textContent=DN[dow(d)]; var sm=document.createElement("small"); sm.textContent="Public Holiday"; td.appendChild(sm);}
         else td.textContent=DN[dow(d)];
         td.onclick=function(){ if(state.ph[d]) delete state.ph[d]; else state.ph[d]=true;
-          if(state.c[d]&&state.c[d].indexOf("Yes")===0) state.c[d]=state.ph[d]?"Yes (4:15 AM)":"Yes";
+          if(state.c[d]&&state.c[d].indexOf("Yes")===0) state.c[d]=yesLbl(d);
           save(); render(); };
         tr.appendChild(td);
         ["c","d","e","f"].forEach(function(k){
-          var c=document.createElement("td"); c.className="cell"; var v=state[k][d]||"";
+          var c=document.createElement("td"); c.className="cell"; var v=val(k,d);
           if(v){
             if(v==="Off"){c.className+=" off"; c.textContent="Off";}
             else if(k==="d"){ c.className+=" yes"; items(v).forEach(function(t,i){ if(i) c.appendChild(document.createElement("br")); c.appendChild(document.createTextNode(t)); }); cnt.d+=items(v).length; }
             else { c.className+=" yes"; if(v==="Yes (4:15 AM)"){c.textContent="Yes"; var s2=document.createElement("small"); s2.textContent="(4:15 AM)"; c.appendChild(s2);} else c.textContent="Yes"; cnt[k]++; }
           }
-          c.onclick=function(){ if(k==="c") cycleC(d); else if(k==="d") cycleD(d); else cycleYes(k,d); save(); render(); };
+          c.onclick=function(){ if((k==="c"&&dow(d)===6)||(k==="e"&&dow(d)!==6)) return; if(k==="c") cycleC(d); else if(k==="d") cycleD(d); else cycleYes(k,d); save(); render(); };
           tr.appendChild(c);
         });
         body.appendChild(tr);
@@ -183,7 +185,7 @@ button:disabled{opacity:.5;cursor:default}
       var x=ws.getCell(c+"4"); x.fill={type:"pattern",pattern:"solid",fgColor:{argb:i<3?navy:org}};
       x.font=fnt({bold:true,color:{argb:"FFFFFFFF"}}); x.alignment=ctr; x.border=bd;
     });
-    var heads=["Date","Day","2:55 AM\nRed Q","Other","Weekend\n4:15 AM\nRed Q","9:30 PM\nTerminal 2"];
+    var heads=["Date","Day","2:55 AM\nRed Q","Other","Saturday\n4:15 AM\nRed Q","9:30 PM\nTerminal 2"];
     heads.forEach(function(h,i){
       var x=ws.getCell(5,i+1); x.value=h; x.fill={type:"pattern",pattern:"solid",fgColor:{argb:i<3?navy:org}};
       x.font=fnt({bold:true,color:{argb:"FFFFFFFF"}}); x.alignment=ctr; x.border=bd;
@@ -198,7 +200,7 @@ button:disabled{opacity:.5;cursor:default}
       var b=ws.getCell(r,2); b.value=dayLabel(d);
       [a,b].forEach(function(x){x.font=fnt({bold:x===b&&!!state.ph[d]});x.alignment=ctr;x.border=bd;});
       keys.forEach(function(k,i){
-        var x=ws.getCell(r,3+i), v=state[k][d]||"";
+        var x=ws.getCell(r,3+i), v=val(k,d);
         if(v){ x.value=v; if(v==="Off") x.font=fnt({bold:true,color:{argb:"FFC00000"}}); else {x.font=fnt({bold:true,color:{argb:"FF0000FF"}}); cnt[k]+=(k==="d"?items(v).length:1);} }
         else x.font=fnt();
         x.alignment=ctr; x.border=bd;
